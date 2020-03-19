@@ -49,6 +49,8 @@ export class Server {
         this.io.on("connection", socket => {
             new CallSocketHandler(this.sessionStore, this.candiadtesQueue, kurentoClient, socket);
         });
+
+        
     }
 
     public async bootstrap() {

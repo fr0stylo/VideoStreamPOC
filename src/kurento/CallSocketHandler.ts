@@ -25,10 +25,10 @@ export class CallSocketHandler {
             this.call(message.to, message.from, message.sdpOffer);
         })
 
-        socket.on('incomingCallResponse', (message: any) => {
+        socket.on('incomingCallResponse', async (message: any) => {
             console.log('incomingCallResponse', message)
 
-            this.incomingCallResponse(message.from, message.callResponse, message.sdpOffer);
+            await this.incomingCallResponse(message.from, message.callResponse, message.sdpOffer);
         });
 
         socket.on('stop', () => {
@@ -37,11 +37,18 @@ export class CallSocketHandler {
             this.stop();
         });
 
-        socket.on('onIceCandidate', (message: any) => {
+        socket.on('onIceCandidate', async (message: any) => {
             console.log('onIceCandidate', message);
 
-            this.onIceCandidate(message.candidate);
+            await this.onIceCandidate(message.candidate);
         });
+
+        socket.on('disconnect', () => {
+            console.log('Client disconnected:', this.socketId);
+
+            this.candidatesQueue.clearCandidatesQueue(this.socketId);
+            this.userRegistry.unregister(this.socketId);
+        })
     }
 
     onError(error: string) {
@@ -75,6 +82,7 @@ export class CallSocketHandler {
         if (this.userRegistry.getByName(to)) {
             const callee = this.userRegistry.getByName(to);
             caller.sdpOffer = sdpOffer
+            console.log(this.userRegistry.getById(this.socketId));
             callee.peer = from;
             caller.peer = to;
             const message = {
@@ -98,7 +106,7 @@ export class CallSocketHandler {
         caller.sendMessage(message);
     }
 
-    incomingCallResponse(from: any, callResponse: any, calleeSdp: any) {
+    async incomingCallResponse(from: any, callResponse: any, calleeSdp: any) {
         this.candidatesQueue.clearCandidatesQueue(this.socketId);
 
         function onError(callerReason: string | null, calleeReason: string) {
@@ -133,32 +141,30 @@ export class CallSocketHandler {
             pipelines[caller.id] = pipeline;
             pipelines[callee.id] = pipeline;
 
-            pipeline.createPipeline(caller.id, callee.id, this.socket, () => {
-                pipeline.generateSdpAnswer(caller.id, caller.sdpOffer, (callerSdpAnswer: any) => {
-                    pipeline.generateSdpAnswer(callee.id, calleeSdp, (calleeSdpAnswer: any) => {
-                        let message = {
-                            id: 'startCommunication',
-                            response: '',
-                            sdpAnswer: calleeSdpAnswer
-                        };
-                        callee.sendMessage(message);
+            await pipeline.createPipeline(caller.id, callee.id)
+            const callerSdpAnswer = await pipeline.generateSdpAnswer(caller.id, caller.sdpOffer);
+            const calleeSdpAnswer = await pipeline.generateSdpAnswer(callee.id, calleeSdp);
 
-                        message = {
-                            id: 'callResponse',
-                            response: 'accepted',
-                            sdpAnswer: callerSdpAnswer
-                        };
-                        caller.sendMessage(message);
-                    });
-                });
-            });
+            let message = {
+                id: 'startCommunication',
+                response: '',
+                sdpAnswer: calleeSdpAnswer
+            };
+            await callee.sendMessage(message);
+
+            message = {
+                id: 'callResponse',
+                response: 'accepted',
+                sdpAnswer: callerSdpAnswer
+            };
+            await caller.sendMessage(message);
         } else {
             const decline = {
                 id: 'callResponse',
                 response: 'rejected',
                 message: 'user declined'
             };
-            caller.sendMessage(decline);
+            await caller.sendMessage(decline);
         }
     }
 
@@ -187,13 +193,13 @@ export class CallSocketHandler {
         this.candidatesQueue.clearCandidatesQueue(this.socketId);
     }
 
-    onIceCandidate(_candidate: any) {
-        const candidate =   kurento.getComplexType('IceCandidate')(_candidate);
+    async onIceCandidate(_candidate: any) {
+        const candidate = kurento.getComplexType('IceCandidate')(_candidate);
         const user = this.userRegistry.getById(this.socketId);
 
         if (pipelines[user.id] && pipelines[user.id].webRtcEndpoint && pipelines[user.id].webRtcEndpoint[user.id]) {
             var webRtcEndpoint = pipelines[user.id].webRtcEndpoint[user.id];
-            webRtcEndpoint.addIceCandidate(candidate);
+            await webRtcEndpoint.addIceCandidate(candidate);
         }
         else {
             if (!this.candidatesQueue.get(user.id)) {

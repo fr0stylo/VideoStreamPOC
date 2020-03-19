@@ -15,7 +15,7 @@
  *
  */
 
-var ws = io.connect("http://localhost:5000/");
+var ws = io.connect("https://localhost:5000/");
 var videoInput;
 var videoOutput;
 var webRtcPeer;
