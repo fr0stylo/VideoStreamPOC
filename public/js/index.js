@@ -100,19 +100,19 @@ window.onbeforeunload = function () {
 
 
 ws.on('registerResponse', (message) => {
-	console.info('Received message: ' + message);
+	console.info('Received message: ' + JSON.stringify(message));
 	resgisterResponse(message);
 })
 ws.on('callResponse', (message) => {
-	console.info('Received message: ' + message);
+	console.info('Received message: ' + JSON.stringify(message));
 	callResponse(message);
 });
 ws.on('incomingCall', (message) => {
-	console.info('Received message: ' + message);
+	console.info('Received message: ' + JSON.stringify(message));
 	incomingCall(message);
 });
 ws.on('startCommunication', (message) => {
-	console.info('Received message: ' + message);
+	console.info('Received message: ' + JSON.stringify(message));
 	startCommunication(message);
 });
 ws.on('stopCommunication', () => {
@@ -120,7 +120,7 @@ ws.on('stopCommunication', () => {
 	stop(true);
 });
 ws.on('iceCandidate', (message) => {
-	console.info('Received message: ' + message);
+	console.info('Received message: ' + JSON.stringify(message));
 	webRtcPeer.addIceCandidate(message.candidate)
 });
 
