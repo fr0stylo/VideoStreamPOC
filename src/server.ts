@@ -2,93 +2,54 @@ import express, { Application } from "express";
 import socketIO, { Server as SocketIOServer } from "socket.io";
 import { createServer, Server as HTTPServer } from "http";
 import path from "path";
+import { UserRegistry } from "./user-session/UserRegistry";
+import { CandidatesQueue } from "./kurento/CadidatesQueue";
+import kurento from 'kurento-client';
+import { CallSocketHandler } from "./kurento/CallSocketHandler";
+
+export type ProcessArgs = {
+    as_uri: string;
+    ws_uri: string;
+    file_uri: string;
+}
 
 export class Server {
-    private httpServer: HTTPServer | undefined;
-    private app: Application | undefined;
-    private io: SocketIOServer | undefined;
-
-    private activeSockets: string[] = [];
+    private app: Application = express();
+    private httpServer: HTTPServer = createServer(this.app);
+    private io: SocketIOServer = socketIO(this.httpServer);
+    private sessionStore: UserRegistry = new UserRegistry();
+    private candiadtesQueue: CandidatesQueue = new CandidatesQueue();
 
     private readonly DEFAULT_PORT = Number(process.env.PORT) || 5000;
 
-    constructor() {
-        this.initialize();
-    }
-
-    private initialize(): void {
-        this.app = express();
-        this.httpServer = createServer(this.app);
-        this.io = socketIO(this.httpServer);
-
-        this.configureApp();
-        this.configureRoutes();
-        this.handleSocketConnection();
-    }
+    constructor(public args: ProcessArgs) {}
 
     private configureApp(): void {
-        this.app!.use(express.static(path.join(__dirname, "../public")));
+        this.app.use(express.static(path.join(__dirname, "../public")));
     }
 
     private configureRoutes(): void {
-        this.app!.get("/", (req, res) => {
+        this.app.get("/", (req, res) => {
             res.sendFile("index.html");
         });
     }
 
-    private handleSocketConnection(): void {
-        this.io!.on("connection", socket => {
-            const existingSocket = this.activeSockets.find(
-                existingSocket => existingSocket === socket.id
-            );
+    private async handleSocketConnection() {
+        const kurentoClient = await kurento(this.args.ws_uri);
 
-            if (!existingSocket) {
-                this.activeSockets.push(socket.id);
-
-                socket.emit("update-user-list", {
-                    users: this.activeSockets.filter(
-                        existingSocket => existingSocket !== socket.id
-                    )
-                });
-
-                socket.broadcast.emit("update-user-list", {
-                    users: [socket.id]
-                });
-            }
-
-            socket.on("call-user", (data: any) => {
-                socket.to(data.to).emit("call-made", {
-                    offer: data.offer,
-                    socket: socket.id
-                });
-            });
-
-            socket.on("make-answer", data => {
-                socket.to(data.to).emit("answer-made", {
-                    socket: socket.id,
-                    answer: data.answer
-                });
-            });
-
-            socket.on("reject-call", data => {
-                socket.to(data.from).emit("call-rejected", {
-                    socket: socket.id
-                });
-            });
-
-            socket.on("disconnect", () => {
-                this.activeSockets = this.activeSockets.filter(
-                    existingSocket => existingSocket !== socket.id
-                );
-                socket.broadcast.emit("remove-user", {
-                    socketId: socket.id
-                });
-            });
+        this.io.on("connection", socket => {
+            new CallSocketHandler(this.sessionStore, this.candiadtesQueue, kurentoClient, socket);
         });
     }
 
+    public async bootstrap() {
+        await this.configureApp();
+        await this.configureRoutes();
+        await this.handleSocketConnection();
+    }
+
     public listen(callback: (port: number) => void): void {
-        this.httpServer!.listen(this.DEFAULT_PORT, () => {
+        this.httpServer.listen(this.DEFAULT_PORT, () => {
             callback(this.DEFAULT_PORT);
         });
     }

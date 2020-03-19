@@ -63,7 +63,7 @@ function updateUserList(socketIds) {
     });
 }
 
-const socket = io.connect("localhost:5000");
+const socket = io.connect("http://localhost:5000/");
 
 socket.on("update-user-list", ({ users }) => {
     updateUserList(users);
@@ -79,19 +79,8 @@ socket.on("remove-user", ({ socketId }) => {
 
 socket.on("call-made", async data => {
     if (getCalled) {
-        const confirmed = confirm(
-            `User "Socket: ${data.socket}" wants to call you. Do accept this call?`
-        );
-
-        if (!confirmed) {
-            socket.emit("reject-call", {
-                from: data.socket
-            });
-
-            return;
-        }
+        return;
     }
-
     await peerConnection.setRemoteDescription(
         new RTCSessionDescription(data.offer)
     );
