@@ -1,10 +1,13 @@
+import fs from 'fs';
+import path from "path";
+
+import { createServer, Server as HTTPServer } from "https";
 import express, { Application } from "express";
 import socketIO, { Server as SocketIOServer } from "socket.io";
-import { createServer, Server as HTTPServer } from "http";
-import path from "path";
+import kurento from 'kurento-client';
+
 import { UserRegistry } from "./user-session/UserRegistry";
 import { CandidatesQueue } from "./kurento/CadidatesQueue";
-import kurento from 'kurento-client';
 import { CallSocketHandler } from "./kurento/CallSocketHandler";
 
 export type ProcessArgs = {
@@ -13,16 +16,22 @@ export type ProcessArgs = {
     file_uri: string;
 }
 
+var options =
+{
+    key: fs.readFileSync('keys/server.key'),
+    cert: fs.readFileSync('keys/server.crt')
+};
+
 export class Server {
     private app: Application = express();
-    private httpServer: HTTPServer = createServer(this.app);
+    private httpServer: HTTPServer = createServer(options, this.app);
     private io: SocketIOServer = socketIO(this.httpServer);
     private sessionStore: UserRegistry = new UserRegistry();
     private candiadtesQueue: CandidatesQueue = new CandidatesQueue();
 
     private readonly DEFAULT_PORT = Number(process.env.PORT) || 5000;
 
-    constructor(public args: ProcessArgs) {}
+    constructor(public args: ProcessArgs) { }
 
     private configureApp(): void {
         this.app.use(express.static(path.join(__dirname, "../public")));
