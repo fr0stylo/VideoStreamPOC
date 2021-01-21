@@ -18,7 +18,7 @@
     "kurento-client": "^6.13.0",
     "memorystore": "^1.6.2",
     "minimist": "^1.2.5",
-    "socket.io": "^2.3.0",
+    "socket.io": "^2.4.0",
     "ts-node": "^8.4.1",
     "typescript": "^3.7.2",
     "ws": "^7.2.3"
